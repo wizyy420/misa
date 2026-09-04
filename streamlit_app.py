@@ -1,83 +1,33 @@
 import streamlit as st
-from openai import OpenAI
-import base64
+from groq import Groq
 
-st.set_page_config(page_title="Hacking Buddy", page_icon="🔐")
+# Konfiguracja
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-# Klient łączy się z darmowym API Hugging Face (Inference Providers)
-client = OpenAI(
-    base_url="https://router.huggingface.co/v1",
-    api_key=st.secrets["HF_TOKEN"],  # ustawiamy w Secrets na Streamlit Cloud
-)
+# Definiowanie osobowości
+PERSONALITIES = {
+    "haker": "Jesteś doświadczonym hakerem, który pracował jako etyczny haker. Wyjaśniasz zagadnienia bezpieczeństwa w sposób przystępny, ale dokładny. Zawsze podkreślasz kolejność działań i ostrzegasz gdy jakieś działania mogą spowodować problemy prawne.",
+    "Mentor SI": "Jesteś cierpliwym mentorem. Wyjaśniasz wszystko krok po kroku, jakbyś uczył początkującego. Używasz prostych analogii i przykładów.",
+    "Ekspert Bezpieczeństwa": "Mówisz konkretnie, profesjonalnie. Używasz specjalistycznej terminologii. Skupiasz się na praktycznych aspektach zabezpieczeń i ich słabościach."
+}
 
-# Model z obsługą obrazów (rozumie screenshoty), darmowy w ramach limitu
-MODEL = "Qwen/Qwen2-VL-7B-Instruct"
+# Interfejs
+st.title("Misa v2")
 
-SYSTEM_PROMPT = """Jesteś przyjaznym, cierpliwym nauczycielem cyberbezpieczeństwa i pentestingu.
-Rozmawiasz z kimś, kto zaczyna kompletnie od zera - nie zna się na sieciach, Linuksie ani hackingu.
+personality = st.selectbox("Wybierz osobowość:", list(PERSONALITIES.keys()))
+user_input = st.text_area("Twoje pytanie:")
 
-Zasady:
-- Tłumacz WSZYSTKO prostym językiem, jakbyś tłumaczył koledze bez żadnego backgroundu technicznego.
-- Unikaj żargonu bez natychmiastowego wyjaśnienia go prostymi słowami/analogiami.
-- Tematy które znasz dobrze: sieci komputerowe (IP, porty, HTTP), Linux, VirtualBox/VM,
-  OWASP Top 10 (błędy jak SQL injection, XSS, path traversal, security misconfiguration),
-  znajdowanie wrażliwych/ukrytych plików na stronach, narzędzia (nmap, Burp Suite, gobuster, curl),
-  bug bounty i legalne platformy do ćwiczenia (PortSwigger Web Security Academy, TryHackMe, HackTheBox).
-- Gdy dostajesz screenshot błędu (np. z terminala, VirtualBox, przeglądarki) - przeanalizuj go dokładnie,
-  wytłumacz co dokładnie oznacza komunikat, i zaproponuj konkretne kolejne kroki.
-- Zawsze delikatnie przypominaj o legalności: testowanie i łamanie rzeczy tylko na własnych labach
-  (VM, Juice Shop, PortSwigger) albo w ramach autoryzowanych programów bug bounty z jasnym zakresem.
-- Bądź konkretny i praktyczny, nie lej wody. Krótkie, jasne odpowiedzi zamiast ścian tekstu."""
-
-st.title("🔐 Hacking Buddy")
-st.caption("Twój tłumacz cyberbezpieczeństwa - pytaj śmiało, wklej screenshot błędu jeśli trzeba.")
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Wyświetl dotychczasową rozmowę
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        for part in msg["content"]:
-            if part["type"] == "text":
-                st.markdown(part["text"])
-            elif part["type"] == "image_url":
-                st.image(part["image_url"]["url"])
-
-uploaded_image = st.file_uploader(
-    "Dołącz screenshot błędu (opcjonalnie)", type=["png", "jpg", "jpeg"]
-)
-prompt = st.chat_input("Zadaj pytanie o hacking, sieci, VM...")
-
-if prompt:
-    content = [{"type": "text", "text": prompt}]
-    if uploaded_image:
-        b64 = base64.b64encode(uploaded_image.getvalue()).decode("utf-8")
-        content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/png;base64,{b64}"},
-        })
-
-    st.session_state.messages.append({"role": "user", "content": content})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-        if uploaded_image:
-            st.image(uploaded_image)
-
-    api_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    for msg in st.session_state.messages:
-        api_messages.append({"role": msg["role"], "content": msg["content"]})
-
-    with st.chat_message("assistant"):
-        with st.spinner("Myślę..."):
-            response = client.chat.completions.create(
-                model=MODEL,
-                messages=api_messages,
-                max_tokens=800,
-            )
-            answer = response.choices[0].message.content
-            st.markdown(answer)
-
-    st.session_state.messages.append(
-        {"role": "assistant", "content": [{"type": "text", "text": answer}]}
+if st.button("Wyślij") and user_input:
+    messages = [
+        {"role": "system", "content": PERSONALITIES[personality]},
+        {"role": "user", "content": user_input}
+    ]
+    
+    response = client.chat.completions.create(
+        model="mixtral-8x7b-32768",
+        messages=messages,
+        max_tokens=1000,
+        temperature=0.7  # Kontroluje kreatywność
     )
+    
+    st.write(response.choices[0].message.content)
