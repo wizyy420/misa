@@ -2,7 +2,7 @@ import streamlit as st
 from groq import Groq
 
 # Konfiguracja
-client = Groq(api_key=st.secrets["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"])
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 # Definiowanie osobowości
 PERSONALITIES = {
